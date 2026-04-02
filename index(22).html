@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tone Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Uncial+Antiqua&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#080808; --panel:#0d0d0d; --border:#2a2a2a; --b2:#3a3a3a;
+  --green:#7a9e3a; --red:#8b1a1a; --amber:#8b5a1a;
+  --frak:'UnifrakturMaguntia',cursive;
+  --ui:'Uncial Antiqua',cursive;
+  --mono:'Share Tech Mono',monospace;
+}
+body { background:var(--bg); color:#fff; font-family:var(--ui); min-height:100vh; display:flex; flex-direction:column; }
+
+.main {
+  background-image: url('texture.jpg');
+  background-size: cover;
+  background-position: center;
+}
+
+.section { position: relative; }
+.section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(8,8,8,0.92);
+  border-radius: 8px;
+  z-index: 0;
+}
+.section > * { position: relative; z-index: 1; }
+
+.right { background: rgba(13,13,13,0.93); }
+.tabs  { background: rgba(8,8,8,0.96); }
+.hdr   { background: rgba(8,8,8,0.96); }
+
+.hdr { padding:14px 24px; border-bottom:2px solid rgba(255,255,255,0.5); display:flex; align-items:center; gap:16px; flex-shrink:0; }
+.hdr-title { font-family:var(--frak); font-size:32px; color:#fff; line-height:1; }
+.hdr-sub { font-family:var(--mono); font-size:9px; color:#555; letter-spacing:.2em; }
+
+.tabs { display:flex; border-bottom:2px solid rgba(255,255,255,0.45); padding:0 24px; }
+.tab { font-family:var(--ui); font-size:13px; color:#666; padding:10px 20px; cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; }
+.tab:hover { color:#ccc; }
+.tab.active { color:#7a9e3a; border-bottom-color:#7a9e3a; }
+
+.main { display:flex; flex:1; }
+.left { flex:1; padding:20px; min-width:0; }
+.right { width:300px; flex-shrink:0; background:var(--panel); border-left:2px solid rgba(255,255,255,0.45); padding:0; overflow-y:auto; position:sticky; top:0; height:100vh; }
+.right::-webkit-scrollbar { width:4px; }
+.right::-webkit-scrollbar-thumb { background:#1a1a1a; }
+
+.section { background:var(--panel); border:2px solid rgba(255,255,255,0.45); border-radius:8px; padding:20px; margin-bottom:20px; }
+.section-title { font-family:var(--ui); font-size:18px; color:#ccc; margin-bottom:16px; }
+
+.cbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:10px; }
+.clbl { font-family:var(--ui); font-size:13px; color:#aaa; white-space:nowrap; }
+
+.btn { font-family:var(--ui); font-size:13px; padding:7px 18px; border-radius:4px; border:1px solid var(--b2); background:transparent; color:#ccc; cursor:pointer; transition:all .2s; white-space:nowrap; }
+.btn:hover:not(:disabled) { color:#fff; border-color:#555; background:#111; }
+.btn:disabled { opacity:.25; cursor:not-allowed; }
+.btn.go   { color:#7a9e3a; border-color:#2a3a12; background:#0d1a08; }
+.btn.go:hover:not(:disabled) { background:#152508; }
+.btn.halt { color:#8b1a1a; border-color:#3a1010; background:#1a0808; }
+.btn.rec  { color:#8b1a1a; border-color:#3a1010; background:#1a0808; }
+.btn.rec.on { animation:blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+.btn.dl { color:#aa66cc; border-color:#2a1a3a; background:#120a18; }
+.btn.dl:hover:not(:disabled) { background:#1a0f28; color:#cc88ff; }
+.btn.cmp { color:#4499dd; border-color:#1a2a3a; background:#0a1018; }
+.btn.cmp:hover:not(:disabled) { color:#66bbff; background:#0f1a28; }
+
+.seek-wrap { display:flex; align-items:center; gap:6px; flex:1; min-width:200px; }
+.seek { flex:1; height:3px; -webkit-appearance:none; background:#1c1c1c; border-radius:2px; outline:none; cursor:pointer; }
+.seek::-webkit-slider-thumb { -webkit-appearance:none; width:10px; height:10px; background:var(--green); border-radius:50%; }
+.tl { font-family:var(--mono); font-size:10px; color:#888; white-space:nowrap; }
+
+.status-bar { font-family:var(--mono); font-size:11px; color:#888; padding:6px 0; margin-bottom:10px; min-height:22px; }
+
+.canvas-box { background:#030303; border-radius:6px; margin-bottom:12px; overflow:hidden; }
+canvas { display:block; width:100%; }
+
+.dl-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+
+/* Right panel */
+.rp { padding:16px; border-bottom:1px solid rgba(255,255,255,0.25); }
+.rp-title { font-family:var(--ui); font-size:14px; color:#ccc; margin-bottom:12px; }
+.score { font-family:var(--frak); font-size:56px; line-height:1; color:#333; transition:color .4s; }
+.score.good { color:#7a9e3a; }
+.score.ok { color:var(--amber); }
+.score.bad { color:var(--red); }
+.prog-wrap { height:3px; background:#1c1c1c; border-radius:2px; margin-top:8px; overflow:hidden; }
+.prog-bar { height:100%; background:var(--green); width:0; transition:width .4s; }
+.band-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid #111; }
+.band-row:last-child { border-bottom:none; }
+.bname { font-family:var(--ui); font-size:13px; color:#fff; }
+.badge { font-family:var(--mono); font-size:10px; padding:2px 8px; border-radius:2px; color:#444; }
+.badge.ok    { background:#111a08; color:#7a9e3a; border:1px solid #2a3a12; }
+.badge.cut   { background:#1a0808; color:#8b1a1a; border:1px solid #3a1010; }
+.badge.boost { background:#1a1008; color:#8b5a1a; border:1px solid #3a2810; }
+.stat-row { display:flex; justify-content:space-between; padding:4px 0; }
+.slabel { font-family:var(--ui); font-size:12px; color:#aaa; }
+.sval { font-family:var(--mono); font-size:11px; color:#fff; }
+.legend { display:flex; gap:16px; }
+.leg { display:flex; align-items:center; gap:6px; font-family:var(--ui); font-size:13px; color:#fff; }
+.legdot { width:12px; height:2px; border-radius:1px; }
+
+.mode { display:none; }
+.mode.active { display:block; }
+
+/* Jagged border effect via SVG filter */
+.jagged-border {
+  position: relative;
+}
+.jagged-border::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.15);
+}
+
+/* SVG noise filter for distressed look */
+.distressed-line {
+  filter: url(#torn);
+}
+</style>
+
+
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-title">Tone Analyzer</div>
+  <div class="hdr-sub">NANO CORTEX EDITION — v2.0</div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="mic">Microphone</div>
+  <div class="tab" data-tab="f1">File 1 (Reference)</div>
+  <div class="tab" data-tab="f2">File 2 (Yours)</div>
+  <div class="tab" data-tab="cmp">Compare</div>
+</div>
+
+<div class="main">
+  <div class="left">
+
+    <!-- MIC TAB -->
+    <div class="mode active" id="mode-mic">
+      <div class="section">
+        <div class="section-title">Microphone Input</div>
+        <div class="cbar">
+          <button class="btn go" id="micStartBtn">Start Mic</button>
+          <button class="btn halt" id="micStopBtn" disabled>Stop Mic</button>
+          <button class="btn rec" id="micRecordBtn" disabled>● Record</button>
+          <button class="btn" id="micRecordStopBtn" disabled>Stop Rec</button>
+          <span class="tl" id="recordingTime" style="color:#cc3333;min-width:40px">0:00</span>
+          <div class="clbl" style="margin-left:8px">Playback</div>
+          <button class="btn go" id="micPlayRecBtn" disabled>Play Rec</button>
+          <button class="btn halt" id="micStopRecBtn" disabled>Stop</button>
+        </div>
+        <div class="status-bar" id="micStatusBar">Start microphone to begin</div>
+
+        <div class="canvas-box"><canvas id="fftCanvasMic" height="300"></canvas></div>
+        <div class="canvas-box"><canvas id="avgCanvasMic" height="250"></canvas></div>
+        <div class="canvas-box"><canvas id="peakCanvasMic" height="250"></canvas></div>
+
+        <div class="dl-row">
+          <button class="btn dl" id="downloadAvgBtnMic" disabled>Save Avg PNG</button>
+          <button class="btn dl" id="downloadPeakBtnMic" disabled>Save Peak PNG</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILE 1 TAB -->
+    <div class="mode" id="mode-f1">
+      <div class="section">
+        <div class="section-title">File 1 — Reference</div>
+        <div class="cbar">
+          <button class="btn" id="selectFile1Btn">Browse</button>
+          <input type="file" id="fileInput1" accept="audio/*,video/*" style="display:none">
+          <span class="tl" id="fileName1" style="color:#aaa">no file</span>
+        </div>
+        <div class="cbar">
+          <button class="btn go" id="playBtn1" disabled>Play</button>
+          <button class="btn" id="pauseBtn1" disabled>Pause</button>
+          <button class="btn halt" id="stopBtn1" disabled>Stop</button>
+          <div class="seek-wrap">
+            <span class="tl" id="currentTime1">0:00</span>
+            <input type="range" class="seek" id="seekBar1" min="0" max="100" value="0" disabled>
+            <span class="tl" id="duration1">0:00</span>
+          </div>
+        </div>
+        <div class="status-bar" id="file1StatusBar">Load a file to begin</div>
+
+        <div class="canvas-box"><canvas id="fftCanvas1" height="300"></canvas></div>
+        <div class="canvas-box"><canvas id="avgCanvas1" height="250"></canvas></div>
+        <div class="canvas-box"><canvas id="peakCanvas1" height="250"></canvas></div>
+
+        <div class="dl-row">
+          <button class="btn dl" id="downloadAvgBtn1" disabled>Save Avg PNG</button>
+          <button class="btn dl" id="downloadPeakBtn1" disabled>Save Peak PNG</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILE 2 TAB -->
+    <div class="mode" id="mode-f2">
+      <div class="section">
+        <div class="section-title">File 2 — Yours</div>
+        <div class="cbar">
+          <button class="btn" id="selectFile2Btn">Browse</button>
+          <input type="file" id="fileInput2" accept="audio/*,video/*" style="display:none">
+          <span class="tl" id="fileName2" style="color:#aaa">no file</span>
+        </div>
+        <div class="cbar">
+          <button class="btn go" id="playBtn2" disabled>Play</button>
+          <button class="btn" id="pauseBtn2" disabled>Pause</button>
+          <button class="btn halt" id="stopBtn2" disabled>Stop</button>
+          <div class="seek-wrap">
+            <span class="tl" id="currentTime2">0:00</span>
+            <input type="range" class="seek" id="seekBar2" min="0" max="100" value="0" disabled>
+            <span class="tl" id="duration2">0:00</span>
+          </div>
+        </div>
+        <div class="status-bar" id="file2StatusBar">Load a file to begin</div>
+
+        <div class="canvas-box"><canvas id="fftCanvas2" height="300"></canvas></div>
+        <div class="canvas-box"><canvas id="avgCanvas2" height="250"></canvas></div>
+        <div class="canvas-box"><canvas id="peakCanvas2" height="250"></canvas></div>
+
+        <div class="dl-row">
+          <button class="btn dl" id="downloadAvgBtn2" disabled>Save Avg PNG</button>
+          <button class="btn dl" id="downloadPeakBtn2" disabled>Save Peak PNG</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPARE TAB -->
+    <div class="mode" id="mode-cmp">
+      <div class="section">
+        <div class="section-title">Compare</div>
+        <div class="cbar">
+          <div class="clbl">Reference:</div>
+          <button class="btn" id="cmp-ref-mic">Mic</button>
+          <button class="btn" id="cmp-ref-f1">File 1</button>
+          <div class="clbl" style="margin-left:8px">Yours:</div>
+          <button class="btn" id="cmp-your-mic">Mic</button>
+          <button class="btn" id="cmp-your-f2">File 2</button>
+          <div class="clbl" style="margin-left:8px">Mode:</div>
+          <button class="btn" id="cmp-mode-avg" style="color:#00cc33;border-color:#1a3a1a">Avg</button>
+          <button class="btn" id="cmp-mode-peak">Peak</button>
+          <button class="btn cmp" id="cmp-run">Compare ▶</button>
+        </div>
+        <div class="status-bar" id="cmpStatusBar">Select reference and yours, then press Compare</div>
+        <div class="canvas-box"><canvas id="cmpCanvas" height="400"></canvas></div>
+        <div class="clbl" style="padding:8px 0 4px;color:#888">Normalized (shape only)</div>
+        <div class="canvas-box"><canvas id="cmpCanvasNorm" height="400"></canvas></div>
+        <div class="dl-row">
+          <button class="btn dl" id="cmp-save">Save PNG</button>
+          <button class="btn dl" id="cmp-save-norm">Save Normalized PNG</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right">
+    <div class="rp">
+      <div class="rp-title">Overall Match</div>
+      <div class="score" id="score">—</div>
+      <div class="prog-wrap"><div class="prog-bar" id="prog-bar"></div></div>
+    </div>
+    <div class="rp">
+      <div class="rp-title">Band Diff (yours − ref)</div>
+      <div class="band-row"><span class="bname">Sub</span><span class="badge" id="b-Sub">—</span></div>
+      <div class="band-row"><span class="bname">Bass</span><span class="badge" id="b-Bass">—</span></div>
+      <div class="band-row"><span class="bname">LowMid</span><span class="badge" id="b-LowMid">—</span></div>
+      <div class="band-row"><span class="bname">Mid</span><span class="badge" id="b-Mid">—</span></div>
+      <div class="band-row"><span class="bname">HiMid</span><span class="badge" id="b-HiMid">—</span></div>
+      <div class="band-row"><span class="bname">Presence</span><span class="badge" id="b-Presence">—</span></div>
+      <div class="band-row"><span class="bname">Air</span><span class="badge" id="b-Air">—</span></div>
+    </div>
+    <div class="rp">
+      <div class="rp-title">Stats</div>
+      <div class="stat-row"><span class="slabel">Ref Peak</span><span class="sval" id="s-rp">—</span></div>
+      <div class="stat-row"><span class="slabel">Your Peak</span><span class="sval" id="s-yp">—</span></div>
+      <div class="stat-row"><span class="slabel">Ref Avg</span><span class="sval" id="s-ra">—</span></div>
+      <div class="stat-row"><span class="slabel">Your Avg</span><span class="sval" id="s-ya">—</span></div>
+    </div>
+    <div class="rp">
+      <div class="rp-title">Legend</div>
+      <div class="legend">
+        <div class="leg"><div class="legdot" style="background:#cc3333"></div>Reference</div>
+        <div class="leg"><div class="legdot" style="background:#00cc33"></div>Yours</div>
+      </div>
+    </div>
+    <div class="rp">
+      <div class="rp-title">Avg Data Ready</div>
+      <div class="stat-row"><span class="slabel">Mic Avg</span><span class="sval" id="ready-mic">—</span></div>
+      <div class="stat-row"><span class="slabel">File 1 Avg</span><span class="sval" id="ready-f1">—</span></div>
+      <div class="stat-row"><span class="slabel">File 2 Avg</span><span class="sval" id="ready-f2">—</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── AudioContext ─────────────────────────────────────────────
+let audioContext;
+function getAC() {
+  if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioContext.state === 'suspended') audioContext.resume();
+  return audioContext;
+}
+
+const BANDS = [
+  {name:'Sub',lo:20,hi:60},{name:'Bass',lo:60,hi:250},
+  {name:'LowMid',lo:250,hi:500},{name:'Mid',lo:500,hi:2000},
+  {name:'HiMid',lo:2000,hi:5000},{name:'Presence',lo:5000,hi:8000},
+  {name:'Air',lo:8000,hi:20000}
+];
+
+// ── Stored averages ──────────────────────────────────────────
+let avgMic=null, avgF1=null, avgF2=null;
+let peakMic=null, peakF1=null, peakF2=null;
+
+function setReady(id, ok) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = ok ? '✓ Ready' : '—'; el.style.color = ok ? '#7a9e3a' : '#555'; }
+}
+
+// ── Tabs ─────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.mode').forEach(x => x.classList.remove('active'));
+    document.getElementById(`mode-${t.dataset.tab}`).classList.add('active');
+  });
+});
+
+// ── Drawing ──────────────────────────────────────────────────
+function freqToX(freq, width) {
+  freq = Math.max(20, Math.min(20000, freq));
+  return (Math.log10(freq) - Math.log10(20)) / (Math.log10(20000) - Math.log10(20)) * width;
+}
+
+function drawGrid(ctx, width, height, nyquist) {
+  ctx.lineWidth = 0.5;
+  const offX = 45;
+  const drawW = width - offX;
+  [20,50,100,200,500,1000,2000,5000,10000,20000].forEach(freq => {
+    const x = offX + freqToX(freq, drawW);
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,height); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = '11px Share Tech Mono';
+    ctx.fillText(freq>=1000?`${freq/1000}k`:freq, x+3, height-5);
+  });
+  for (let i=0; i<=10; i++) {
+    const y = (height/10)*i;
+    const db = -60 + (6*(10-i));
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(width,y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '11px Share Tech Mono';
+    ctx.fillText(`${db}dB`, 4, y > 10 ? y-3 : 12);
+  }
+}
+
+function drawSpectrum(ctx, data, width, height, strokeColor, fillColor) {
+  const nyquist = audioContext.sampleRate / 2;
+  const offX = 45; // offset to avoid y-axis label overlap
+  const drawW = width - offX;
+  ctx.strokeStyle = strokeColor;
+  ctx.fillStyle = fillColor;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  let first = true;
+  for (let i=0; i<data.length; i++) {
+    const freq = (i/data.length)*nyquist;
+    if (freq < 20 || freq > 20000) continue;
+    const x = offX + freqToX(freq, drawW);
+    const barH = (data[i]/255)*height;
+    if (first) { ctx.moveTo(x, height-barH); first=false; }
+    else ctx.lineTo(x, height-barH);
+  }
+  ctx.stroke();
+  ctx.lineTo(offX + freqToX(20000, drawW), height);
+  ctx.lineTo(offX, height);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function formatTime(s) {
+  if (isNaN(s)||!s) return '0:00';
+  return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+}
+
+function downloadImage(canvas, filename) {
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+function calcStats(data) {
+  const nyquist = audioContext.sampleRate / 2;
+  let maxV=0, maxI=0, sum=0;
+  for (let i=0;i<data.length;i++) { if(data[i]>maxV){maxV=data[i];maxI=i;} sum+=data[i]; }
+  return {
+    peakHz: Math.round((maxI/data.length)*nyquist),
+    avgDb: (20*Math.log10(Math.max(sum/data.length/255,0.001))).toFixed(1)
+  };
+}
+
+function bandEnergy(data, lo, hi) {
+  const nyquist = audioContext.sampleRate/2, n=data.length;
+  let sum=0,cnt=0;
+  for(let i=0;i<n;i++){const f=(i/n)*nyquist;if(f>=lo&&f<hi){sum+=data[i];cnt++;}}
+  return cnt?sum/cnt:0;
+}
+
+function normalize(data) {
+  const max = Math.max(...data);
+  if (max === 0) return data;
+  const out = new Float32Array(data.length);
+  for (let i=0;i<data.length;i++) out[i] = (data[i]/max)*255;
+  return out;
+}
+
+function updateRight(refD, yourD) {
+  // Normalize both to compare shape only (not level)
+  refD = normalize(refD);
+  yourD = normalize(yourD);
+  const results = BANDS.map(b => {
+    const r=bandEnergy(refD,b.lo,b.hi), y=bandEnergy(yourD,b.lo,b.hi);
+    const rDb=20*Math.log10(Math.max(r/255,0.001)), yDb=20*Math.log10(Math.max(y/255,0.001));
+    const diff=yDb-rDb;
+    return {name:b.name,diff,score:Math.max(0,100-Math.abs(diff)/12*100)};
+  });
+  const total=results.reduce((s,r)=>s+r.score,0)/results.length;
+  const sel=document.getElementById('score');
+  sel.textContent=`${Math.round(total)}%`;
+  sel.className='score '+(total>=80?'good':total>=60?'ok':'bad');
+  document.getElementById('prog-bar').style.width=`${total}%`;
+  results.forEach(r=>{
+    const el=document.getElementById(`b-${r.name}`); if(!el)return;
+    const s=r.diff>=0?'+':'';
+    if(Math.abs(r.diff)<=2){el.textContent=`${s}${r.diff.toFixed(1)}dB OK`;el.className='badge ok';}
+    else if(r.diff>2){el.textContent=`${s}${r.diff.toFixed(1)}dB Cut`;el.className='badge cut';}
+    else{el.textContent=`${r.diff.toFixed(1)}dB Boost`;el.className='badge boost';}
+  });
+  const rs=calcStats(refD),ys=calcStats(yourD);
+  document.getElementById('s-rp').textContent=`${rs.peakHz} Hz`;
+  document.getElementById('s-yp').textContent=`${ys.peakHz} Hz`;
+  document.getElementById('s-ra').textContent=`${rs.avgDb} dB`;
+  document.getElementById('s-ya').textContent=`${ys.avgDb} dB`;
+}
+
+// ════════════════════════════════════════════════════════════════
+// MICROPHONE — original logic from FFT-analyzer-2
+// ════════════════════════════════════════════════════════════════
+let analyserMic, dataArrayMic, bufferLengthMic;
+let micStream, micSource, animationIdMic;
+let averageSpectrumMic, peakSpectrumMic, spectrumCountMic=0;
+let isMicActive=false, isRecording=false;
+let recordingStartTime=0, recordingIntervalId=null;
+let recChunks=[], recMediaRec=null, recBlob=null, recAudio=null;
+
+const fftCanvasMic  = document.getElementById('fftCanvasMic');
+const avgCanvasMic  = document.getElementById('avgCanvasMic');
+const peakCanvasMic = document.getElementById('peakCanvasMic');
+const fftCtxMic     = fftCanvasMic.getContext('2d');
+const avgCtxMic     = avgCanvasMic.getContext('2d');
+const peakCtxMic    = peakCanvasMic.getContext('2d');
+
+function setStatus(id, txt, col) {
+  const el=document.getElementById(id); if(el){el.textContent=txt;el.style.color=col||'#888';}
+}
+
+document.getElementById('micStartBtn').addEventListener('click', async ()=>{
+  try {
+    getAC();
+    micStream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    analyserMic = audioContext.createAnalyser(); analyserMic.fftSize=2048;
+    bufferLengthMic = analyserMic.frequencyBinCount;
+    dataArrayMic = new Uint8Array(bufferLengthMic);
+    averageSpectrumMic = new Float32Array(bufferLengthMic);
+    peakSpectrumMic = new Float32Array(bufferLengthMic);
+    spectrumCountMic=0;
+    micSource = audioContext.createMediaStreamSource(micStream);
+    // Silent gain node to make audio flow through analyser
+    const silentGain = audioContext.createGain();
+    silentGain.gain.value = 0;
+    micSource.connect(analyserMic);
+    analyserMic.connect(silentGain);
+    silentGain.connect(audioContext.destination);
+    isMicActive=true;
+    document.getElementById('micStartBtn').disabled=true;
+    document.getElementById('micStopBtn').disabled=false;
+    document.getElementById('micRecordBtn').disabled=false;
+    setStatus('micStatusBar','Mic active — press Record to start averaging','#7a9e3a');
+    visualizeMic();
+  } catch(e){ alert('Mic error: '+e.message); }
+});
+
+document.getElementById('micStopBtn').addEventListener('click',()=>{
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  if(animationIdMic) cancelAnimationFrame(animationIdMic);
+  if(isRecording) stopRecording();
+  isMicActive=false;
+  document.getElementById('micStartBtn').disabled=false;
+  document.getElementById('micStopBtn').disabled=true;
+  document.getElementById('micRecordBtn').disabled=true;
+  setStatus('micStatusBar','Stopped','#555');
+});
+
+document.getElementById('micRecordBtn').addEventListener('click',()=>{
+  averageSpectrumMic=new Float32Array(bufferLengthMic);
+  peakSpectrumMic=new Float32Array(bufferLengthMic);
+  spectrumCountMic=0;
+  recordingStartTime=Date.now();
+  isRecording=true;
+  // MediaRecorder for playback
+  recChunks=[];
+  const dest=audioContext.createMediaStreamDestination();
+  analyserMic.connect(dest);
+  recMediaRec=new MediaRecorder(dest.stream);
+  recMediaRec.ondataavailable=e=>{if(e.data.size>0)recChunks.push(e.data);};
+  recMediaRec.onstop=()=>{
+    try{analyserMic.disconnect(dest);}catch(e){}
+    recBlob=new Blob(recChunks,{type:'audio/webm'});
+    if(recAudio){recAudio.pause();recAudio.src='';}
+    recAudio=new Audio();
+    recAudio.src=URL.createObjectURL(recBlob);
+    document.getElementById('micPlayRecBtn').disabled=false;
+    document.getElementById('micStopRecBtn').disabled=false;
+  };
+  recMediaRec.start(100);
+  document.getElementById('micRecordBtn').disabled=true;
+  document.getElementById('micRecordBtn').classList.add('on');
+  document.getElementById('micRecordStopBtn').disabled=false;
+  recordingIntervalId=setInterval(()=>{
+    const elapsed=(Date.now()-recordingStartTime)/1000;
+    document.getElementById('recordingTime').textContent=formatTime(elapsed);
+  },100);
+  setStatus('micStatusBar','Recording — play your tone...','#8b1a1a');
+});
+
+document.getElementById('micRecordStopBtn').addEventListener('click', stopRecording);
+
+function stopRecording() {
+  isRecording=false;
+  if(recMediaRec&&recMediaRec.state==='recording') recMediaRec.stop();
+  clearInterval(recordingIntervalId); recordingIntervalId=null;
+  document.getElementById('micRecordBtn').disabled=false;
+  document.getElementById('micRecordBtn').classList.remove('on');
+  document.getElementById('micRecordStopBtn').disabled=true;
+  drawAverageSpectrumMic();
+  drawPeakSpectrumMic();
+  document.getElementById('downloadAvgBtnMic').disabled=false;
+  document.getElementById('downloadPeakBtnMic').disabled=false;
+  // Store avg for compare
+  avgMic = new Float32Array(bufferLengthMic);
+  for(let i=0;i<bufferLengthMic;i++) avgMic[i]=spectrumCountMic?averageSpectrumMic[i]/spectrumCountMic:0;
+  peakMic = new Float32Array(peakSpectrumMic);
+  setReady('ready-mic',true);
+  setStatus('micStatusBar','Done — avg data ready for Compare tab','#7a9e3a');
+}
+
+function visualizeMic() {
+  if(!isMicActive) return;
+  animationIdMic=requestAnimationFrame(visualizeMic);
+  analyserMic.getByteFrequencyData(dataArrayMic);
+  if(isRecording){
+    for(let i=0;i<bufferLengthMic;i++){
+      averageSpectrumMic[i]+=dataArrayMic[i];
+      if(dataArrayMic[i]>peakSpectrumMic[i]) peakSpectrumMic[i]=dataArrayMic[i];
+    }
+    spectrumCountMic++;
+  }
+  // Draw realtime FFT
+  const w=fftCanvasMic.offsetWidth*devicePixelRatio||1200, h=fftCanvasMic.height;
+  fftCanvasMic.width=w;
+  fftCtxMic.fillStyle='#030303'; fftCtxMic.fillRect(0,0,w,h);
+  drawGrid(fftCtxMic,w,h,audioContext.sampleRate/2);
+  drawSpectrum(fftCtxMic,dataArrayMic,w,h,'#7a9e3a','rgba(122,158,58,0.12)');
+  fftCtxMic.fillStyle='rgba(255,255,255,0.6)'; fftCtxMic.font='11px Share Tech Mono';
+  const fw1=fftCanvasMic.width; fftCtxMic.textAlign='right'; fftCtxMic.fillText('Realtime FFT',fw1-8,16); fftCtxMic.textAlign='left';
+}
+
+function drawAverageSpectrumMic() {
+  if(!spectrumCountMic) return;
+  const w=avgCanvasMic.offsetWidth*devicePixelRatio||1200, h=avgCanvasMic.height;
+  avgCanvasMic.width=w;
+  const avg=new Float32Array(bufferLengthMic);
+  for(let i=0;i<bufferLengthMic;i++) avg[i]=averageSpectrumMic[i]/spectrumCountMic;
+  avgCtxMic.fillStyle='#030303'; avgCtxMic.fillRect(0,0,w,h);
+  drawGrid(avgCtxMic,w,h,audioContext.sampleRate/2);
+  drawSpectrum(avgCtxMic,avg,w,h,'#7a9e3a','rgba(122,158,58,0.15)');
+  avgCtxMic.fillStyle='rgba(255,255,255,0.6)'; avgCtxMic.font='11px Share Tech Mono';
+  const aw1=avgCanvasMic.width; avgCtxMic.textAlign='right'; avgCtxMic.fillText('Average Spectrum',aw1-8,16); avgCtxMic.textAlign='left';
+}
+
+function drawPeakSpectrumMic() {
+  if(!spectrumCountMic) return;
+  const w=peakCanvasMic.offsetWidth*devicePixelRatio||1200, h=peakCanvasMic.height;
+  peakCanvasMic.width=w;
+  peakCtxMic.fillStyle='#030303'; peakCtxMic.fillRect(0,0,w,h);
+  drawGrid(peakCtxMic,w,h,audioContext.sampleRate/2);
+  drawSpectrum(peakCtxMic,peakSpectrumMic,w,h,'#7a9e3a','rgba(122,158,58,0.15)');
+  peakCtxMic.fillStyle='rgba(255,255,255,0.6)'; peakCtxMic.font='11px Share Tech Mono';
+  const pw1=peakCanvasMic.width; peakCtxMic.textAlign='right'; peakCtxMic.fillText('Peak Spectrum',pw1-8,16); peakCtxMic.textAlign='left';
+}
+
+document.getElementById('downloadAvgBtnMic').addEventListener('click',()=>downloadImage(avgCanvasMic,'mic_avg_spectrum.png'));
+document.getElementById('downloadPeakBtnMic').addEventListener('click',()=>downloadImage(peakCanvasMic,'mic_peak_spectrum.png'));
+
+// ════════════════════════════════════════════════════════════════
+// FILE PLAYERS — original logic
+// ════════════════════════════════════════════════════════════════
+function setupFilePlayer(num) {
+  let analyser, dataArray, bufferLength;
+  let audioElement, source, animationId;
+  let averageSpectrum, peakSpectrum, spectrumCount=0;
+  let isPlaying=false, isSeeking=false;
+
+  const fftCanvas  = document.getElementById(`fftCanvas${num}`);
+  const avgCanvas  = document.getElementById(`avgCanvas${num}`);
+  const peakCanvas = document.getElementById(`peakCanvas${num}`);
+  const fftCtx     = fftCanvas.getContext('2d');
+  const avgCtx     = avgCanvas.getContext('2d');
+  const peakCtx    = peakCanvas.getContext('2d');
+
+  document.getElementById(`selectFile${num}Btn`).addEventListener('click',()=>document.getElementById(`fileInput${num}`).click());
+
+  document.getElementById(`fileInput${num}`).addEventListener('change',e=>{
+    const file=e.target.files[0]; if(!file) return;
+    getAC();
+    if(audioElement){audioElement.pause();audioElement.src='';}
+    if(animationId) cancelAnimationFrame(animationId);
+    analyser=audioContext.createAnalyser(); analyser.fftSize=2048;
+    bufferLength=analyser.frequencyBinCount;
+    dataArray=new Uint8Array(bufferLength);
+    averageSpectrum=new Float32Array(bufferLength);
+    peakSpectrum=new Float32Array(bufferLength);
+    spectrumCount=0;
+    audioElement=new Audio(); audioElement.crossOrigin='anonymous';
+    audioElement.src=URL.createObjectURL(file);
+    source=audioContext.createMediaElementSource(audioElement);
+    source.connect(analyser); analyser.connect(audioContext.destination);
+    audioElement.addEventListener('loadedmetadata',()=>{
+      document.getElementById(`playBtn${num}`).disabled=false;
+      document.getElementById(`pauseBtn${num}`).disabled=false;
+      document.getElementById(`stopBtn${num}`).disabled=false;
+      document.getElementById(`seekBar${num}`).disabled=false;
+      document.getElementById(`seekBar${num}`).max=audioElement.duration;
+      document.getElementById(`duration${num}`).textContent=formatTime(audioElement.duration);
+    });
+    audioElement.addEventListener('timeupdate',()=>{
+      if(!isSeeking){
+        document.getElementById(`currentTime${num}`).textContent=formatTime(audioElement.currentTime);
+        document.getElementById(`seekBar${num}`).value=audioElement.currentTime;
+      }
+    });
+    audioElement.addEventListener('ended',()=>{
+      isPlaying=false;
+      if(animationId) cancelAnimationFrame(animationId);
+      drawAvg(); drawPeak();
+      document.getElementById(`downloadAvgBtn${num}`).disabled=false;
+      document.getElementById(`downloadPeakBtn${num}`).disabled=false;
+      // Store avg
+      const avg=new Float32Array(bufferLength);
+      for(let i=0;i<bufferLength;i++) avg[i]=spectrumCount?averageSpectrum[i]/spectrumCount:0;
+      if(num===1){avgF1=avg;peakF1=new Float32Array(peakSpectrum);setReady('ready-f1',true);}
+      else{avgF2=avg;peakF2=new Float32Array(peakSpectrum);setReady('ready-f2',true);}
+      setStatus(`file${num}StatusBar`,`Done — avg data ready for Compare tab`,'#7a9e3a');
+    });
+    document.getElementById(`fileName${num}`).textContent=file.name;
+    setStatus(`file${num}StatusBar`,'File loaded — press Play to analyze','#aaa');
+  });
+
+  document.getElementById(`playBtn${num}`).addEventListener('click',()=>{
+    if(!audioElement) return;
+    // Reset accumulators on play
+    averageSpectrum=new Float32Array(bufferLength);
+    peakSpectrum=new Float32Array(bufferLength);
+    spectrumCount=0;
+    audioElement.currentTime=0; audioElement.play();
+    isPlaying=true;
+    setStatus(`file${num}StatusBar`,'Playing — averaging spectrum...','#cc8833');
+    visualize();
+  });
+
+  document.getElementById(`pauseBtn${num}`).addEventListener('click',()=>{
+    if(audioElement) audioElement.pause(); isPlaying=false;
+    if(animationId) cancelAnimationFrame(animationId);
+  });
+
+  document.getElementById(`stopBtn${num}`).addEventListener('click',()=>{
+    if(audioElement){audioElement.pause();audioElement.currentTime=0;}
+    isPlaying=false;
+    if(animationId) cancelAnimationFrame(animationId);
+  });
+
+  document.getElementById(`seekBar${num}`).addEventListener('input',e=>{isSeeking=true;if(audioElement)audioElement.currentTime=e.target.value;});
+  document.getElementById(`seekBar${num}`).addEventListener('change',()=>isSeeking=false);
+
+  document.getElementById(`downloadAvgBtn${num}`).addEventListener('click',()=>downloadImage(avgCanvas,`file${num}_avg.png`));
+  document.getElementById(`downloadPeakBtn${num}`).addEventListener('click',()=>downloadImage(peakCanvas,`file${num}_peak.png`));
+
+  function visualize() {
+    if(!isPlaying) return;
+    animationId=requestAnimationFrame(visualize);
+    analyser.getByteFrequencyData(dataArray);
+    for(let i=0;i<bufferLength;i++){
+      averageSpectrum[i]+=dataArray[i];
+      if(dataArray[i]>peakSpectrum[i]) peakSpectrum[i]=dataArray[i];
+    }
+    spectrumCount++;
+    // Draw realtime
+    const w=fftCanvas.offsetWidth*devicePixelRatio||1200, h=fftCanvas.height;
+    fftCanvas.width=w;
+    fftCtx.fillStyle='#030303'; fftCtx.fillRect(0,0,w,h);
+    drawGrid(fftCtx,w,h,audioContext.sampleRate/2);
+    drawSpectrum(fftCtx,dataArray,w,h,'#8b1a1a','rgba(139,26,26,0.12)');
+    fftCtx.fillStyle='rgba(255,255,255,0.6)'; fftCtx.font='11px Share Tech Mono';
+    fftCtx.textAlign='right'; fftCtx.fillText('Realtime FFT',w-8,16); fftCtx.textAlign='left';
+  }
+
+  function drawAvg() {
+    if(!spectrumCount) return;
+    const w=avgCanvas.offsetWidth*devicePixelRatio||1200, h=avgCanvas.height;
+    avgCanvas.width=w;
+    const avg=new Float32Array(bufferLength);
+    for(let i=0;i<bufferLength;i++) avg[i]=averageSpectrum[i]/spectrumCount;
+    avgCtx.fillStyle='#030303'; avgCtx.fillRect(0,0,w,h);
+    drawGrid(avgCtx,w,h,audioContext.sampleRate/2);
+    drawSpectrum(avgCtx,avg,w,h,'#8b1a1a','rgba(139,26,26,0.15)');
+    avgCtx.fillStyle='rgba(255,255,255,0.6)'; avgCtx.font='11px Share Tech Mono';
+    avgCtx.textAlign='right'; avgCtx.fillText('Average Spectrum',w-8,16); avgCtx.textAlign='left';
+  }
+
+  function drawPeak() {
+    if(!spectrumCount) return;
+    const w=peakCanvas.offsetWidth*devicePixelRatio||1200, h=peakCanvas.height;
+    peakCanvas.width=w;
+    peakCtx.fillStyle='#030303'; peakCtx.fillRect(0,0,w,h);
+    drawGrid(peakCtx,w,h,audioContext.sampleRate/2);
+    drawSpectrum(peakCtx,peakSpectrum,w,h,'#8b1a1a','rgba(139,26,26,0.15)');
+    peakCtx.fillStyle='rgba(255,255,255,0.6)'; peakCtx.font='11px Share Tech Mono';
+    peakCtx.textAlign='right'; peakCtx.fillText('Peak Spectrum',w-8,16); peakCtx.textAlign='left';
+  }
+}
+
+setupFilePlayer(1);
+setupFilePlayer(2);
+
+// ════════════════════════════════════════════════════════════════
+// COMPARE TAB
+// ════════════════════════════════════════════════════════════════
+const cmpCanvas = document.getElementById('cmpCanvas');
+const cmpCtx    = cmpCanvas.getContext('2d');
+let cmpRef=null, cmpYour=null, cmpRefLabel='', cmpYourLabel='';
+let cmpMode='avg'; // 'avg' or 'peak'
+
+document.getElementById('cmp-mode-avg').addEventListener('click',()=>{
+  cmpMode='avg';
+  document.getElementById('cmp-mode-avg').style.cssText='color:#00cc33;border-color:#00cc33;';
+  document.getElementById('cmp-mode-peak').style.cssText='';
+});
+document.getElementById('cmp-mode-peak').addEventListener('click',()=>{
+  cmpMode='peak';
+  document.getElementById('cmp-mode-peak').style.cssText='color:#cc8833;border-color:#cc8833;';
+  document.getElementById('cmp-mode-avg').style.cssText='';
+});
+
+
+
+// Store ref/your source data (both avg and peak)
+let cmpRefAvg=null, cmpRefPeak=null, cmpYourAvg=null, cmpYourPeak=null;
+
+function toggleRef(id, avg, peak, label) {
+  if(cmpRefLabel===label && cmpRefAvg!==null) {
+    // deselect
+    cmpRefAvg=null; cmpRefPeak=null; cmpRefLabel='';
+    document.getElementById(id).style.cssText='';
+    setStatus('cmpStatusBar','Ref cleared','#555');
+  } else {
+    if(!avg){alert(label+' data not ready');return;}
+    cmpRefAvg=avg; cmpRefPeak=peak; cmpRefLabel=label;
+    ['cmp-ref-mic','cmp-ref-f1'].forEach(i=>document.getElementById(i).style.cssText='');
+    document.getElementById(id).style.cssText='color:#cc3333;border-color:#cc3333;';
+    setStatus('cmpStatusBar','Ref set: '+label,'#8b1a1a');
+  }
+}
+
+function toggleYour(id, avg, peak, label) {
+  if(cmpYourLabel===label && cmpYourAvg!==null) {
+    // deselect
+    cmpYourAvg=null; cmpYourPeak=null; cmpYourLabel='';
+    document.getElementById(id).style.cssText='';
+    setStatus('cmpStatusBar','Yours cleared','#555');
+  } else {
+    if(!avg){alert(label+' data not ready');return;}
+    cmpYourAvg=avg; cmpYourPeak=peak; cmpYourLabel=label;
+    ['cmp-your-mic','cmp-your-f2'].forEach(i=>document.getElementById(i).style.cssText='');
+    document.getElementById(id).style.cssText='color:#00cc33;border-color:#00cc33;';
+    setStatus('cmpStatusBar','Yours set: '+label,'#7a9e3a');
+  }
+}
+
+document.getElementById('cmp-ref-mic').addEventListener('click',()=>toggleRef('cmp-ref-mic',avgMic,peakMic,'Mic'));
+document.getElementById('cmp-ref-f1').addEventListener('click',()=>toggleRef('cmp-ref-f1',avgF1,peakF1,'File 1'));
+document.getElementById('cmp-your-mic').addEventListener('click',()=>toggleYour('cmp-your-mic',avgMic,peakMic,'Mic'));
+document.getElementById('cmp-your-f2').addEventListener('click',()=>toggleYour('cmp-your-f2',avgF2,peakF2,'File 2'));
+
+document.getElementById('cmp-run').addEventListener('click',()=>{
+  if(!cmpRefAvg||!cmpYourAvg){alert('Set both Reference and Yours first');return;}
+  const ref  = cmpMode==='peak' ? (cmpRefPeak||cmpRefAvg)   : cmpRefAvg;
+  const your = cmpMode==='peak' ? (cmpYourPeak||cmpYourAvg) : cmpYourAvg;
+  const modeLabel = cmpMode==='peak' ? 'Peak' : 'Avg';
+  const w=cmpCanvas.offsetWidth*devicePixelRatio||1200, h=cmpCanvas.height;
+  cmpCanvas.width=w;
+  cmpCtx.fillStyle='#030303'; cmpCtx.fillRect(0,0,w,h);
+  drawGrid(cmpCtx,w,h,audioContext.sampleRate/2);
+  drawSpectrum(cmpCtx,ref,w,h,'#8b1a1a','rgba(139,26,26,0.12)');
+  drawSpectrum(cmpCtx,your,w,h,'#7a9e3a','rgba(122,158,58,0.12)');
+  cmpCtx.font='11px Share Tech Mono'; cmpCtx.textAlign='right';
+  cmpCtx.fillStyle='#8b1a1a'; cmpCtx.fillText(`Ref: ${cmpRefLabel} ${modeLabel}`,w-8,16);
+  cmpCtx.fillStyle='#7a9e3a'; cmpCtx.fillText(`Yours: ${cmpYourLabel} ${modeLabel}`,w-8,30); cmpCtx.textAlign='left';
+  updateRight(ref,your);
+  // Normalized graph
+  const normRef  = normalize(ref);
+  const normYour = normalize(your);
+  const cn = document.getElementById('cmpCanvasNorm');
+  const cx = cn.getContext('2d');
+  cn.width = w;
+  cx.fillStyle='#030303'; cx.fillRect(0,0,w,h);
+  drawGrid(cx,w,h,audioContext.sampleRate/2);
+  drawSpectrum(cx,normRef,w,h,'#8b1a1a','rgba(139,26,26,0.12)');
+  drawSpectrum(cx,normYour,w,h,'#7a9e3a','rgba(122,158,58,0.12)');
+  cx.font='11px Share Tech Mono'; cx.textAlign='right';
+  cx.fillStyle='#8b1a1a'; cx.fillText(`Ref: ${cmpRefLabel} ${modeLabel} (norm)`,w-8,16);
+  cx.fillStyle='#7a9e3a'; cx.fillText(`Yours: ${cmpYourLabel} ${modeLabel} (norm)`,w-8,30); cx.textAlign='left';
+  document.getElementById('cmp-save').disabled=false;
+  document.getElementById('cmp-save-norm').disabled=false;
+  setStatus('cmpStatusBar',`Comparing ${cmpRefLabel} vs ${cmpYourLabel} (${modeLabel})`,'#7a9e3a');
+});
+
+document.getElementById('cmp-save').addEventListener('click',()=>downloadImage(cmpCanvas,'comparison.png'));
+document.getElementById('cmp-save-norm').addEventListener('click',()=>downloadImage(document.getElementById('cmpCanvasNorm'),'comparison_normalized.png'));
+
+// Mic recording playback
+document.getElementById('micPlayRecBtn').addEventListener('click',()=>{
+  if(!recAudio) return;
+  recAudio.currentTime=0; recAudio.play();
+  setStatus('micStatusBar','Playing back recording...','#7a9e3a');
+});
+document.getElementById('micStopRecBtn').addEventListener('click',()=>{
+  if(recAudio){recAudio.pause();recAudio.currentTime=0;}
+  setStatus('micStatusBar','Stopped','#555');
+});
+</script>
+</body>
+</html>
